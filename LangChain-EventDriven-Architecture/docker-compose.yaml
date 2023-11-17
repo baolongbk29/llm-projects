@@ -1,0 +1,58 @@
+version: "3"
+services:
+  zookeeper:
+    image: confluentinc/cp-zookeeper:latest
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+
+  kafka:
+    image: confluentinc/cp-kafka:latest
+    depends_on:
+      - zookeeper
+    ports:
+      - "9092:9092"
+    environment:
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:29092,PLAINTEXT_HOST://localhost:9092
+      # KAFKA_INTER_BROKER_LISTENER_NAME: INTERNAL
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_ZOOKEEPER_SESSION_TIMEOUT_MS: 18000
+
+  kafka_init:
+    image: python:3.10-slim-buster
+    depends_on:
+      - kafka
+    volumes:
+      - ./create_topics.py:/create_topics.py
+    command: >
+      bash -c "
+      pip install confluent_kafka &&
+      python /create_topics.py
+      "
+
+  email_classifier:
+    build: email_classifier
+    depends_on:
+      - kafka
+      - kafka_init
+    env_file:
+      - .env
+
+  order_cancellation_processor:
+    build: order_cancellation_processor
+    depends_on:
+      - kafka
+      - kafka_init
+
+  review_processor:
+    build: review_processor
+    depends_on:
+      - kafka
+      - kafka_init
+
+  inquiry_processor:
+    build: inquiry_processor
+    depends_on:
+      - kafka
+      - kafka_init
